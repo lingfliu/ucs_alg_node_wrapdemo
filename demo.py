@@ -1,5 +1,11 @@
-from ucs_alg_node import AlgNode, Alg, AlgResult, AlgSubmitter, AlgNodeWeb
+from ucs_alg_node import AlgNode, Alg, AlgResult, AlgSubmitter, AlgNodeWeb, AlgTask, utils
 import time
+
+
+task_id = 'task112'
+node_id = 'node001'
+alg_name = 'my_alg'
+out_topic = 'ucs/alg/result'
 
 
 class MyAlg(Alg):
@@ -12,12 +18,15 @@ class MyAlg(Alg):
     def infer_stream(self):
         for i in range(100):
             time.sleep(0.1)
-            yield AlgResult(0, 0, 1, "stub result")
+            result = AlgResult(0, 0, 1, "stub result")
+            # print('result:', str(result))
+            yield result
+
 
 
 def main():
     cfg = {
-        'id': 'node',
+        'id': node_id,
         'name': 'alg_name',
         'mode': 'stream',
         'max_task': 10,
@@ -26,11 +35,10 @@ def main():
         'web_port':9996
     }
 
-    task = {
-        'id': 'task_id123',
-        'sources': ['rtsp://localhost:9111/123',
-                    'mqx://localhost:8011/1123'],
-    }
+    task = AlgTask(id=task_id,
+                   ts=utils.current_time_milli(),
+                   sources= ['rtsp://localhost:9111/123',
+                             'mqx://localhost:8011/1123'])
 
     alg_cfg = {
         # only effective in stream mode
@@ -40,20 +48,22 @@ def main():
     }
 
     out_cfg = {
-        'dest': 'mqtt://localhost:2799',
+
+        'dest': '62.234.16.239:1883',
         'mode': 'mqtt',
-        'username': 'ucs-dev',
-        'passwd': 'M*12@va33',
-        'topic': 'alg'
+        'username': 'admin',
+        'passwd': 'admin1234',
+        'topic': out_topic
     }
 
-    alg = MyAlg(cfg['mode'], task['sources'], alg_cfg['model'], alg_cfg['alg_id'])
+    alg = MyAlg(cfg['mode'], task.sources, alg_cfg['model'], alg_cfg['alg_id'])
 
     submitter = AlgSubmitter(
         dest=out_cfg['dest'],
         mode=out_cfg['mode'],
         username=out_cfg['username'],
         passwd=out_cfg['passwd'],
+        id=cfg['id'],
         topic=out_cfg['topic']  # if in db mode, can be omitted
     )
 
@@ -69,15 +79,14 @@ def main():
     }
 
     node = AlgNode(max_task=10, cfg=node_cfg, task=task)
-    node_web_api = AlgNodeWeb(cfg['web_port'], node)
+    # node_web_api = AlgNodeWeb(cfg['web_port'], node)
 
+    node.start()
     # node_web_api.run()
-    # node.start()
-    node_web_api.run()
 
     print('start node')
     while True:
-        time.sleep(5)
+        time.sleep(100)
         # node.stop()
         # print('stop node, exit')
         # break
