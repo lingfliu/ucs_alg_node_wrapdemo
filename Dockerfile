@@ -9,4 +9,4 @@ RUN pip3 install ./libs/ucs_alg_node-0.1.4-py3-none-any.whl
 RUN pip3 install -r requirements.txt
 COPY . .
 
-ENTRYPOINT ["python3", "demo"]
+ENTRYPOINT ["python3", "demo.py"]
