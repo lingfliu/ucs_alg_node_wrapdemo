@@ -8,10 +8,15 @@ pipeline {
 
     environment {
 	    // GIT地址
-        GIT_URL = 'https://e.coding.net/lingfliu/ucs/ucs_alg_node_service.git'
+        GIT_URL = 'git@e.coding.net:lingfliu/ucs/ucs_alg_node_wrapdemo.git'
 	    // 版本信息，用当前时间
         VERSION = VersionNumber versionPrefix: 'prod.', versionNumberString: '${BUILD_DATE_FORMATTED, "yyyyMMdd"}.${BUILDS_TODAY}'
-        GIT_URL_WITH_AUTH = 'https://hjk:1baffd762ce9869ca4a1d62c85259bdda4c57d7c@e.coding.net/lingfliu/ucs/ucs_alg_node_service.git'
+        GIT_URL_WITH_AUTH = 'git@e.coding.net:lingfliu/ucs/ucs_alg_node_wrapdemo.git'
+        DOCKER_IMAGE = "ucs_alg_node_wrapdemo:${env.BUILD_ID}"
+        CODING_DOCKER_REPO = ' lingfliu-docker.pkg.coding.net/ucs/docker'
+        DOCKER_IMAGE_TAGGED = " lingfliu-docker.pkg.coding.net/ucs/docker/ucs_alg_node_wrapdemo:${VERSION}"
+        CODING_DOCKER_USERNAME = '18219252116'
+        CODING_DOCKER_PASSWORD = 'w13302687555'
     }
     
     parameters {
@@ -71,11 +76,41 @@ pipeline {
             }
         }
         
-        stage('代码打包') {
+        stage('Docker Build') {
             steps {
-                echo '前后端团队编写docker compose'
+                script {
+                    // 构建 Docker 镜像，构建和运行
+                   sh ' docker build -t ${DOCKER_IMAGE} .'
+                }
             }
         }
+        stage('Docker Login') {
+            steps {
+                script {
+                    // 登录到 Coding.net 的 Docker 仓库
+                    sh 'echo ${CODING_DOCKER_PASSWORD} | docker login docker.coding.net -u ${CODING_DOCKER_USERNAME} --password-stdin'
+                }
+            }
+        }
+        
+        stage('Docker Tag') {
+            steps {
+                script {
+                    // 标记 Docker 镜像
+                    sh 'docker tag ${DOCKER_IMAGE} ${DOCKER_IMAGE_TAGGED}'
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                script {
+                    // 推送 Docker 镜像到 Coding.net
+                    sh 'docker push ${DOCKER_IMAGE_TAGGED}'
+                }
+            }
+        }
+        
         
         stage('远程部署项目') {
             steps {
@@ -104,6 +139,7 @@ pipeline {
                         )
                     ]
                 )
+                 sh ' docker-compose up -d'
             }
         }
 
