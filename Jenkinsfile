@@ -11,12 +11,8 @@ pipeline {
         GIT_URL = 'git@e.coding.net:lingfliu/ucs/ucs_alg_node_wrapdemo.git'
 	    // 版本信息，用当前时间
         VERSION = VersionNumber versionPrefix: 'prod.', versionNumberString: '${BUILD_DATE_FORMATTED, "yyyyMMdd"}.${BUILDS_TODAY}'
-        GIT_URL_WITH_AUTH = 'git@e.coding.net:lingfliu/ucs/ucs_alg_node_wrapdemo.git'
-        DOCKER_IMAGE = "ucs_alg_node_wrapdemo:${env.BUILD_ID}"
-        CODING_DOCKER_REPO = ' lingfliu-docker.pkg.coding.net/ucs/docker'
-        DOCKER_IMAGE_TAGGED = " lingfliu-docker.pkg.coding.net/ucs/docker/ucs_alg_node_wrapdemo:${VERSION}"
-        CODING_DOCKER_USERNAME = '18219252116'
-        CODING_DOCKER_PASSWORD = 'w13302687555'
+        //打包镜像相关信息
+        DOCKER_IMAGE = "ucs_alg_node_wrapdemo:${VERSION}"
     }
     
     parameters {
@@ -24,11 +20,6 @@ pipeline {
 		name: 'OP',
 		choices: 'publish\nrollback', 
 		description: 'publish(发布新版本时选择，部署后自动生成新tag) rollback(回滚时选择，需要同时选择回滚的tag)'
-	    )
-
-        choice(
-		name: 'DEPLOYENV', 
-		choices: 'prod\ntest', description: 'prod(部署环境) test(测试环境)'
 	    )
 
         gitParameter(
@@ -44,21 +35,11 @@ pipeline {
 		type: 'PT_TAG', 
 		useRepository: env.GIT_URL
 	    )
-
-        string(
-            name: 'REMOTE_DIR', 
-            defaultValue: '/home/springboot_2',
-            description: '远程部署目录'
-        )
-
-        string(
-            name: 'EXEC_COMMAND', 
-            defaultValue: 'nohup sh /home/springboot_2/test.sh', 
-            description: '远程部署执行脚本'
-        )
     }
 
+    
     stages {
+       
         stage('拉取代码') {
             steps {
 		        // 清除工作空间并拉取最新的代码
@@ -76,7 +57,18 @@ pipeline {
             }
         }
         
-        stage('Docker Build') {
+        stage('停止和删除相关容器') {
+            steps {
+                script {
+                    //停止运行中的容器
+                    sh 'docker rm -f ucs_alg_node_web | true'
+                    //删除相关无用镜像，避免占有服务器资源
+                    sh 'docker rmi -f $(docker images -q --filter "reference=ucs_alg_node_wrapdemo*") | true'
+                }
+            }
+        }
+
+        stage('Docker构建镜像') {
             steps {
                 script {
                     // 构建 Docker 镜像，构建和运行
@@ -84,73 +76,40 @@ pipeline {
                 }
             }
         }
-        stage('Docker Login') {
+    
+
+        stage('配置环境变量') {
             steps {
                 script {
-                    // 登录到 Coding.net 的 Docker 仓库
-                    sh 'echo ${CODING_DOCKER_PASSWORD} | docker login docker.coding.net -u ${CODING_DOCKER_USERNAME} --password-stdin'
-                }
-            }
-        }
-        
-        stage('Docker Tag') {
-            steps {
-                script {
-                    // 标记 Docker 镜像
-                    sh 'docker tag ${DOCKER_IMAGE} ${DOCKER_IMAGE_TAGGED}'
+                    sh 'echo "VERSION=' + env.VERSION + '" > .env'
                 }
             }
         }
 
-        stage('Docker Push') {
+        stage('停止相关容器') {
             steps {
                 script {
-                    // 推送 Docker 镜像到 Coding.net
-                    sh 'docker push ${DOCKER_IMAGE_TAGGED}'
+                    //停止运行中的容器
+                    sh 'docker rm -f ucs_alg_node_wrapdemo | true'
                 }
             }
         }
-        
-        
-        stage('远程部署项目') {
+
+        stage('部署项目') {
             steps {
-                sshPublisher(
-                    publishers: [
-                        sshPublisherDesc(
-                            configName: '123.60.173.147', 
-                            transfers: [
-                                sshTransfer(
-                                    cleanRemote: false,
-                                    excludes: '', 
-                                    execCommand: params.EXEC_COMMAND, 
-                                    execTimeout: 120000, 
-                                    flatten: false, 
-                                    makeEmptyDirs: false, 
-                                    noDefaultExcludes: false, 
-                                    patternSeparator: '[, ]+', 
-                                    remoteDirectory: params.REMOTE_DIR, 
-                                    remoteDirectorySDF: false, 
-                                    removePrefix: '', sourceFiles: '*'
-                                )
-                            ],
-                            usePromotionTimestamp: false, 
-                            useWorkspaceInPromotion: false, 
-                            verbose: false
-                        )
-                    ]
-                )
-                 sh ' docker-compose up -d'
+                script {
+                    sh 'chmod +x ./docker-compose.yaml && docker-compose -f ./docker-compose.yaml up -d'
+                }
             }
         }
 
-        stage('新版本打tag') {
+        stage('删除未被使用的相关镜像和none的镜像') {
             steps {
-                // 执行脚本步骤来打标签并推送
                 script {
-                    // 打标签
-                    sh 'git tag ' + env.VERSION
-                    // 推送标签至远程仓库
-                    sh 'git push ' + env.GIT_URL_WITH_AUTH + ' ' + env.VERSION
+                    //删除相关无用镜像，避免占有服务器资源
+                    sh 'docker image prune --filter "label=repository=ucs_alg_node_wrapdemo*" | true'
+                    //为none的异常镜像
+                    sh 'docker rmi $(docker images -f "dangling=true" -q) | true'
                 }
             }
         }
