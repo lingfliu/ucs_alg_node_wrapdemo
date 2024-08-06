@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: lingfliu-docker.pkg.coding.net/ucs/docker/ucs_alg_node_wrapdemo:${VERSION}
+    image: ucs_alg_node_wrapdemo:${VERSION}
     container_name: ucs_alg_node_wrapdemo
     restart: always
     ports:
