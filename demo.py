@@ -25,7 +25,7 @@ class MyAlg(Alg):
             yield result
 
     def infer_batch(self, task):
-        time.sleep(10)
+        time.sleep(20)
         ts = time.time_ns()
         result = AlgResult(task.id, time.time_ns(), [1, ts], "stub result")
         return result
@@ -83,6 +83,7 @@ def main():
         'mode': cfg['mode'],
         'task': task,
         'alg': alg,
+        'alg_timeout': 20,
         'out': submitter
     }
 
